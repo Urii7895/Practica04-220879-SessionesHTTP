@@ -1,120 +1,121 @@
-// Importamos las dependencias
-const express = require('express');
-const session = require('express-session');
-const uuid = require('uuid');
-const os = require('os');
-const bodyParser = require('body-parser');
+import express from "express";
+import session from "express-session";
+import bodyParser from "body-parser";
+import moment from "moment";
+import { v4 as uuidv4 } from "uuid";
+import cors from "cors";
 
 const app = express();
-const port = 3000;
+const PORT = 3000;
+app.use(express.json());
+app.use(cors());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// Middleware
-app.use(bodyParser.json());
-app.use(session({
-  secret: 'your_secret_key',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { maxAge: 30 * 60 * 1000 }, // 30 minutos
-}));
+// Sesiones almacenadas en memoria.
 
-// Función para obtener la MAC Address del servidor
-const getMacAddress = () => {
-  const networkInterfaces = os.networkInterfaces();
-  for (const iface of Object.values(networkInterfaces)) {
-    for (const config of iface) {
-      if (!config.internal && config.mac) {
-        return config.mac;
-      }
-    }
-  }
-  return 'Unknown';
+
+app.use(
+    session({
+        secret: "practica-04-controlSessiones",//firma la cookie de la sesion (esto asegura que las cookies no pueden ser modificada por 3eros)
+        resave:false,//evita que las sesiones se guarden nuevamente en el almacenamiento
+        saveUninitialized: false,// evita que se creen sesiones vacías (no inicializadas) en el almacenamiento.
+        cookie:{maxAge: 5*68*1000},//duracion de la cookie 
+
+    })
+);
+// Función de utilidad que permite acceder y extraer la direccion del cliente
+const getClientIp = (req) => {
+  return (
+    req.headers["x-forwarded-for"] || //contiene la ip del del cliente 
+    req.connection.remoteAddress || //IP del cliente desde la conexión de red principal.
+    req.socket.remoteAddress || //IP directamente desde el socket de la conexión.
+    req.connection.socket?.remoteAddress //Otra forma de obtener la IP, en caso de que las demás no funcionen.
+  );
 };
+const sessions = {};
 
-// Endpoints
+// Endpoint del login  
 
-// 1. Login
-app.post('/login', (req, res) => {
-  const { fullName, email } = req.body;
+app.post("/login", (req, res) => {
+  const { email, nickname, macAddress } = req.body;//extrayendo 3 campos de la solicitud 
 
-  if (!fullName || !email) {
-    return res.status(400).json({ message: 'Nombre completo y email son requeridos.' });
+  if (!email || !nickname || !macAddress) {//nickname  nombreUsuario o apodo 
+    return res.status(400).json({ message: "Falta algún campo." });//validacion de campos si estan vacios o no fue enviado 
   }
+  const sessionId = uuidv4();//uuid indentificador unico universal ideal para identificar objetos 
+  const now = new Date();//variable creada para registrar la hora en el que se crea la sesion 
 
-  const sessionId = uuid.v4();
-  const now = new Date();
-
-  req.session.user = {
-    id: sessionId,
-    fullName,
+  sessions[sessionId] = {//alamacenimiento de la sesion 
+    sessionId,
     email,
-    creationDate: now,
-    lastAccess: now,
-    ipClient: req.ip,
-    macClient: '00:00:00:00:00:00', // Placeholder para obtener la MAC del cliente
-    ipServer: req.hostname,
+    nickname,
+    macAddress,
+    ip: getClientIp(req),
+    createdAt: now,
+    lastAccessedAt: now,
   };
 
-  res.status(200).json({ message: 'Sesión iniciada.', sessionId });
-});
-
-// 2. Logout
-app.post('/logout', (req, res) => {
-  if (req.session.user) {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ message: 'Error al cerrar la sesión.' });
-      }
-      res.status(200).json({ message: 'Sesión cerrada correctamente.' });
-    });
-  } else {
-    res.status(400).json({ message: 'No hay sesión activa.' });
-  }
-});
-
-// 3. Update
-app.put('/update', (req, res) => {
-  if (!req.session.user) {
-    return res.status(400).json({ message: 'No hay sesión activa para actualizar.' });
-  }
-
-  const { fullName, email } = req.body;
-
-  if (fullName) req.session.user.fullName = fullName;
-  if (email) req.session.user.email = email;
-  req.session.user.lastAccess = new Date();
-
-  res.status(200).json({ message: 'Sesión actualizada.', session: req.session.user });
-});
-
-// 4. Status
-app.get('/status', (req, res) => {
-  if (!req.session.user) {
-    return res.status(404).json({ message: 'No hay sesión activa.' });
-  }
-
-  const now = new Date();
-  const duration = (now - req.session.user.creationDate) / 1000; // Duración en segundos
-  const inactivity = (now - req.session.user.lastAccess) / 1000; // Inactividad en segundos
-
-  res.status(200).json({
-    sessionId: req.session.user.id,
-    duration: `${duration} segundos`,
-    inactivity: `${inactivity} segundos`,
-    session: req.session.user,
+  res.status(200).json({//respuesta del usuario
+    message: "Inicio de sesión exitoso.",
+    sessionId,
   });
 });
 
-// 5. List current sessions
-app.get('/listcurrent', (req, res) => {
-  if (!req.session.user) {
-    return res.status(404).json({ message: 'No hay sesión activa.' });
+// Logout Endpoint para cerrar sesion 
+app.post("/logout", (req, res) => {
+  const { sessionId } = req.body;
+
+  if (!sessionId || !sessions[sessionId]) {// comprobar si hay sesiones activas con ese ID 
+    return res.status(404).json({ message: "No se ha encontrado una sesión activa." });
   }
 
-  res.status(200).json({ activeSession: req.session.user });
+  delete sessions[sessionId];// destruccion de la sesion 
+
+  req.session?.destroy((err) => {//Verifica si req.session existe y llama al método destroy para eliminar los datos de la sesión en el servidor.
+    if (err) {
+      return res.status(500).send("Error al cerrar la sesión.");//si existe una error durante la sesso lo mostrara 
+    }
+  });
+  res.status(200).json({ message: "Logout exitoso." });//respuesta si todo sale bien 
 });
 
-// Servidor
-app.listen(port, () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
-  console.log(`MAC Address del servidor: ${getMacAddress()}`);
+// Actualización de la sesión
+app.put("/update", (req, res) => { //definicion de la ruta 
+  const { sessionId, email, nickname } = req.body;//aqui se extra estos datos para llenarlos y actualizar los datos 
+
+  if (!sessionId || !sessions[sessionId]) {//verifica que exista una session activa con el ID 
+    return res.status(404).json({ message: "No existe una sesión activa." });
+  }
+  if (email) sessions[sessionId].email = email;//actualizan de los campos 
+  if (nickname) sessions[sessionId].nickname = nickname;
+  sessions[sessionId].lastAccessedAt = new Date();//actualizacion de la ultima fecha de la sesion fecha y hora actual 
+
+  res.status(200).json({//respuesta de la funcion si se realizo con exito o no 
+    message: "Sesión actualizada correctamente.",
+    session: {
+      sessionId,
+      email: sessions[sessionId].email,//respuesta de exito con los datos actualizados 
+      nickname: sessions[sessionId].nickname,
+      lastAccessedAt: sessions[sessionId].lastAccessedAt,
+    },
+  });
 });
+
+// Estado de la sesión
+app.get("/status", (req, res) => {
+  const sessionId = req.query.sessionId;//requiere del ID 
+
+  if (!sessionId || !sessions[sessionId]) {//verifiacaison de la sesion existe con el ID 
+    return res.status(404).json({ message: "No hay sesión activa." });
+  }
+
+  res.status(200).json({//respuesta de la funcion si se realizo el codigo 
+    message: "Sesión activa.",
+    session: sessions[sessionId],
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
+});
+
