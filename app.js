@@ -5,8 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 import cors from "cors";
 import os from "os";
 
-const PORT = 3000;
-
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -151,7 +149,7 @@ app.get("/", (req, res) => {
     });
 });
 
-
+const PORT = 3000;
 
 // Iniciar el servidor
 app.listen(PORT, () => {
