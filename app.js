@@ -62,28 +62,41 @@ const getserverNetworkInfo = () =>{
 
 // Endpoint del login  
 
+// Login Endpoint
 app.post("/login", (req, res) => {
-  const { email, nickname, macAddress } = req.body;//extrayendo 3 campos de la solicitud 
+  const { email, nickname, macAddress } = req.body;
 
-  if (!email || !nickname || !macAddress) {//nickname  nombreUsuario o apodo 
-    return res.status(400).json({ message: "Falta algún campo." });//validacion de campos si estan vacios o no fue enviado 
+  if (!email || !nickname || !macAddress) {
+      return res.status(400).json({ message: "Falta algún campo." });
   }
-  const sessionId = uuidv4();//uuid indentificador unico universal ideal para identificar objetos 
-  const now = new Date();//variable creada para registrar la hora en el que se crea la sesion 
+  const sessionId = uuidv4();
+  const now = new Date();
+  const clientIp = getClientIp(req); // IP del cliente
+  const { serverIp, serverMac } = getServerNetworkInfo(); // IP y MAC del servidor
 
-  sessions[sessionId] = {//alamacenimiento de la sesion 
-    sessionId,
-    email,
-    nickname,
-    macAddress,
-    ip: getClientIp(req),
-    createdAt: now,
-    lastAccessedAt: now,
+  // Guardar la sesión con la información que solicitaste
+  sessions[sessionId] = {
+      sessionId,
+      email,
+      nickname,
+      macAddress,
+      clientIp, // IP del cliente
+      serverIp, // IP del servidor
+      serverMac, // MAC del servidor
+      createdAt: now,
+      lastAccessedAt: now,
+      duration: 0, // Inicializamos duración
+      inactivityTime: 0, // Inicializamos inactividad
   };
 
-  res.status(200).json({//respuesta del usuario
-    message: "Inicio de sesión exitoso.",
-    sessionId,
+  // Respuesta con las IPs y MACs
+  res.status(200).json({
+      message: "Inicio de sesión exitoso.",
+      sessionId,
+      clientIp,  // IP del cliente
+      serverIp,  // IP del servidor
+      serverMac, // Dirección MAC del servidor
+      clientMac: macAddress, // Dirección MAC del cliente
   });
 });
 
