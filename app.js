@@ -38,65 +38,61 @@ app.get('/' ,(request,response) =>{
 // Función de utilidad que permite acceder y extraer la direccion del cliente
 const getClientIp = (req) => {
   return (
-    req.headers["x-forwarded-for"] || //contiene la ip del del cliente 
-    req.connection.remoteAddress || //IP del cliente desde la conexión de red principal.
-    req.socket.remoteAddress || //IP directamente desde el socket de la conexión.
-    req.connection.socket?.remoteAddress //Otra forma de obtener la IP, en caso de que las demás no funcionen.
+    req.headers["x-forwarded-for"] || // Contiene la IP del cliente
+    req.connection.remoteAddress || // IP del cliente desde la conexión de red principal.
+    req.socket.remoteAddress || // IP directamente desde el socket de la conexión.
+    req.connection.socket?.remoteAddress // Otra forma de obtener la IP, en caso de que las demás no funcionen.
   );
 };
+
 const sessions = {};
 
-
-//funcionalidad que usa nos permite accedeer a la informacion de la interfaz grafica de red 
-const getserverNetworkInfo = () =>{
-  const interfaces =os.networkInterfaces();
-  for(const name in interfaces) {
-    for (const iface of interfaces) {
-      if(iface.family ==='Ipv4' && !FontFace.interna) {
-        return {serverIp:iface.address,serverMac: iface.mac};
+// Funcionalidad que nos permite acceder a la información de la interfaz gráfica de red
+const getServerNetworkInfo = () => {
+  const interfaces = os.networkInterfaces();
+  for (const name in interfaces) {
+    for (const iface of interfaces[name]) { // Corregido: 'interfaces[name]' en lugar de 'interfaces'
+      if (iface.family === 'IPv4' && !iface.internal) { // Corregido: 'iface.internal'
+        return { serverIp: iface.address, serverMac: iface.mac };
       }
     }
   }
-  
-  }
+};
 
-// Endpoint del login  
-
-// Login Endpoint
 app.post("/login", (req, res) => {
   const { email, nickname, macAddress } = req.body;
 
   if (!email || !nickname || !macAddress) {
-      return res.status(400).json({ message: "Falta algún campo." });
+    return res.status(400).json({ message: "Falta algún campo." });
   }
   const sessionId = uuidv4();
   const now = new Date();
   const clientIp = getClientIp(req); // IP del cliente
   const { serverIp, serverMac } = getServerNetworkInfo(); // IP y MAC del servidor
 
-  // Guardar la sesión con la información que solicitaste
+  // Guardar la sesión con la información solicitada
   sessions[sessionId] = {
-      sessionId,
-      email,
-      nickname,
-      macAddress,
-      clientIp, // IP del cliente
-      serverIp, // IP del servidor
-      serverMac, // MAC del servidor
-      createdAt: now,
-      lastAccessedAt: now,
-      duration: 0, // Inicializamos duración
-      inactivityTime: 0, // Inicializamos inactividad
+    sessionId,
+    email,
+    nickname,
+    macAddress,
+    clientIp, // IP del cliente
+    serverIp, // IP del servidor
+    serverMac, // MAC del servidor
+    createdAt: now,
+    lastAccessedAt: now,
+    duration: 0, // Inicializamos duración
+    inactivityTime: 0, // Inicializamos inactividad
   };
 
   // Respuesta con las IPs y MACs
   res.status(200).json({
-      message: "Inicio de sesión exitoso.",
-      sessionId,
-      clientIp,  // IP del cliente
-      serverIp,  // IP del servidor
-      serverMac, // Dirección MAC del servidor
-      clientMac: macAddress, // Dirección MAC del cliente
+    message: "Inicio de sesión exitoso.",
+    sessionId,
+    clientIp,  // IP del cliente
+    serverIp,  // IP del servidor
+    serverMac, // Dirección MAC del servidor
+    clientMac: macAddress, // Dirección MAC del cliente
   });
 });
 
